@@ -311,6 +311,40 @@ public class VoiceConnection extends Connection {
         sendCallRequestToActivity(ACTION_ANSWER_CALL, handle);
         sendCallRequestToActivity(ACTION_AUDIO_SESSION, handle);
         Log.d(TAG, "[VoiceConnection] onAnswer executed");
+        // bring the app to foreground
+        try {
+            // Prefer launching your app via its launch intent. You can also use a deep link if you prefer.
+            Intent launchIntent = context.getPackageManager().getLaunchIntentForPackage(context.getPackageName());
+        
+            // Option A: use the launch intent and pass data via extras
+            if (launchIntent != null) {
+                // pass call metadata so JS can pick it up
+                if (handle != null) {
+                    String chatId = handle.get("chatId");
+                    String callUUID = handle.get(EXTRA_CALL_UUID); // EXTRA_CALL_UUID constant used in repo
+                    if (chatId != null) launchIntent.putExtra("chatId", chatId);
+                    if (callUUID != null) launchIntent.putExtra("callUUID", callUUID);
+                }
+        
+                launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                context.startActivity(launchIntent);
+                Log.d(TAG, "[VoiceConnection] Launched app via launchIntent");
+            } else {
+                // Option B: fallback to deep link (safer for JS linking)
+                String uri = "zenfinder://";
+                if (handle != null && handle.get("chatUrl") != null) {
+                    uri += Uri.encode(handle.get("chatUrl"));
+                }
+                Intent deep = new Intent(Intent.ACTION_VIEW, Uri.parse(uri));
+                deep.setPackage(context.getPackageName());
+                deep.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                context.startActivity(deep);
+                Log.d(TAG, "[VoiceConnection] Launched app via deep link: " + uri);
+            }
+        } catch (Throwable t) {
+            Log.e(TAG, "[VoiceConnection] Failed to launch app on answer", t);
+        }
+
     }
 
     private void _onReject(int rejectReason, String replyMessage) {
