@@ -341,6 +341,19 @@ public class VoiceConnection extends Connection {
                 context.startActivity(deep);
                 Log.d(TAG, "[VoiceConnection] Launched app via deep link: " + uri);
             }
+
+            // ✅ End call after a short delay
+            new Handler().postDelayed(() -> {
+                Log.d(TAG, "[VoiceConnection] Ending call after bringing app to foreground");
+                try {
+                    setDisconnected(new DisconnectCause(DisconnectCause.LOCAL));
+                    sendCallRequestToActivity(ACTION_END_CALL, handle);
+                    ((VoiceConnectionService) context).deinitConnection(handle.get(EXTRA_CALL_UUID));
+                    destroy();
+                } catch (Throwable t) {
+                    Log.e(TAG, "[VoiceConnection] Failed to end call after bringing app to foreground", t);
+                }
+            }, 800); // delay in ms (adjust as needed)
         } catch (Throwable t) {
             Log.e(TAG, "[VoiceConnection] Failed to launch app on answer", t);
         }
