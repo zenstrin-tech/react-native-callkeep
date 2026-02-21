@@ -316,49 +316,50 @@ public class VoiceConnection extends Connection {
         Log.d(TAG, "[VoiceConnection] onAnswer executed");
         // bring the app to foreground
         try {
-            // Prefer launching your app via its launch intent. You can also use a deep link if you prefer.
-            Intent launchIntent = context.getPackageManager().getLaunchIntentForPackage(context.getPackageName());
-        
-            // Option A: use the launch intent and pass data via extras
-            if (launchIntent != null) {
-                // pass call metadata so JS can pick it up
-                if (handle != null) {
-                    String chatId = handle.get("chatId");
-                    String callUUID = handle.get(EXTRA_CALL_UUID); // EXTRA_CALL_UUID constant used in repo
-                    if (chatId != null) launchIntent.putExtra("chatId", chatId);
-                    if (callUUID != null) launchIntent.putExtra("callUUID", callUUID);
-                }
-        
-                launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-                context.startActivity(launchIntent);
-                Log.d(TAG, "[VoiceConnection] Launched app via launchIntent");
-            } else {
-                // Option B: fallback to deep link (safer for JS linking)
-                String uri = "zenfinder://";
-                if (handle != null && handle.get("chatUrl") != null) {
-                    uri += Uri.encode(handle.get("chatUrl"));
-                }
-                Intent deep = new Intent(Intent.ACTION_VIEW, Uri.parse(uri));
-                deep.setPackage(context.getPackageName());
-                deep.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-                context.startActivity(deep);
-                Log.d(TAG, "[VoiceConnection] Launched app via deep link: " + uri);
+            String callUUID = handle.get(EXTRA_CALL_UUID);
+            String chatId = handle.get("chatId");
+            String link = handle.get("link");
+    
+            if (chatId == null || link == null) {
+                Log.w(TAG, "[VoiceConnection] Missing chatId or link in handle, cannot deep link. chatId=" + chatId + ", link=" + link);
+                return;
             }
-
-            // ✅ End call after a short delay
-            // new Handler().postDelayed(() -> {
-            //     Log.d(TAG, "[VoiceConnection] Ending call after bringing app to foreground");
-            //     try {
-            //         setDisconnected(new DisconnectCause(DisconnectCause.LOCAL));
-            //         sendCallRequestToActivity(ACTION_END_CALL, handle);
-            //         ((VoiceConnectionService) context).deinitConnection(handle.get(EXTRA_CALL_UUID));
-            //         destroy();
-            //     } catch (Throwable t) {
-            //         Log.e(TAG, "[VoiceConnection] Failed to end call after bringing app to foreground", t);
-            //     }
-            // }, 800); // delay in ms (adjust as needed)
+    
+            // Parse account and metadata out of the livekit link
+            Uri linkUri = Uri.parse(link);
+            String account = linkUri.getQueryParameter("account");
+            String metadata = linkUri.getQueryParameter("metadata");
+    
+            // Build the Expo Router deep link path:
+            // yourscheme:///(no-auth)/call/{chatId}?account=...&metadata=...&callkeepUUID=...
+            // Build URI string manually to avoid appendPath encoding (no-auth) parentheses
+            StringBuilder uriString = new StringBuilder("zenfinder:///(no-auth)/call/");
+            uriString.append(Uri.encode(chatId));
+            
+            boolean firstParam = true;
+            if (account != null) {
+                uriString.append("?account=").append(Uri.encode(account));
+                firstParam = false;
+            }
+            if (metadata != null) {
+                uriString.append(firstParam ? "?" : "&").append("metadata=").append(Uri.encode(metadata));
+                firstParam = false;
+            }
+            if (callUUID != null) {
+                uriString.append(firstParam ? "?" : "&").append("callkeepUUID=").append(Uri.encode(callUUID));
+            }
+            
+            Uri deepLinkUri = Uri.parse(uriString.toString());
+            Log.d(TAG, "[VoiceConnection] Deep linking to: " + deepLinkUri);
+            
+            Intent intent = new Intent(Intent.ACTION_VIEW, deepLinkUri);
+            intent.setPackage(context.getPackageName());
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            context.startActivity(intent);
+            Log.d(TAG, "[VoiceConnection] Deep link intent started successfully");
+    
         } catch (Throwable t) {
-            Log.e(TAG, "[VoiceConnection] Failed to launch app on answer", t);
+            Log.e(TAG, "[VoiceConnection] Failed to deep link on answer", t);
         }
 
     }
