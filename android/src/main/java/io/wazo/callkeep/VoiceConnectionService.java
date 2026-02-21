@@ -440,6 +440,19 @@ public class VoiceConnectionService extends ConnectionService {
         }
         HashMap<String, String> extrasMap = this.bundleToMap(extras);
 
+        // Flatten EXTRA_PAYLOAD into extrasMap so VoiceConnection.handle
+        // gets link, chatId etc. available in _onAnswer for deep link navigation
+        Bundle payload = extras.getBundle(EXTRA_PAYLOAD);
+        if (payload != null) {
+            for (String key : payload.keySet()) {
+                Object value = payload.get(key);
+                if (value instanceof String) {
+                    extrasMap.put(key, (String) value);
+                    Log.d(TAG, "[VoiceConnectionService] createConnection: injected payload key: " + key);
+                }
+            }
+        }
+
         String callerNumber = request.getAddress().toString();
         Log.d(TAG, "[VoiceConnectionService] createConnection, callerNumber:" + callerNumber);
 
