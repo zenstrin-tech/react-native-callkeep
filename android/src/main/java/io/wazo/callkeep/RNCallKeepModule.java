@@ -443,6 +443,17 @@ public class RNCallKeepModule extends ReactContextBaseJavaModule implements Life
         this.displayIncomingCall(uuid, number, callerName, hasVideo, null);
     }
 
+    @ReactMethod
+    public void displayIncomingCall(String uuid, String number, String callerName, boolean hasVideo, ReadableMap extraData) {
+        Bundle payload = null;
+        if (extraData != null) {
+            payload = new Bundle();
+            if (extraData.hasKey("link")) payload.putString("link", extraData.getString("link"));
+            if (extraData.hasKey("chatId")) payload.putString("chatId", extraData.getString("chatId"));
+        }
+        this.displayIncomingCall(uuid, number, callerName, hasVideo, payload);
+    }
+
     public void displayIncomingCall(String uuid, String number, String callerName, boolean hasVideo, @Nullable Bundle payload) {
         if (!isConnectionServiceAvailable() || !hasPhoneAccount()) {
             Log.w(TAG, "[RNCallKeepModule] displayIncomingCall ignored due to no ConnectionService or no phone account");
