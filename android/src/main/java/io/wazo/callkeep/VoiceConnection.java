@@ -31,11 +31,13 @@ import android.telecom.DisconnectCause;
 import android.telecom.TelecomManager;
 import android.net.Uri;
 import android.util.Log;
+import android.app.ActivityManager;
 
 import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.util.HashMap;
+import java.util.List;
 
 import static io.wazo.callkeep.Constants.ACTION_ANSWER_CALL;
 import static io.wazo.callkeep.Constants.ACTION_AUDIO_SESSION;
@@ -321,45 +323,72 @@ public class VoiceConnection extends Connection {
             String link = handle.get("link");
     
             if (chatId == null || link == null) {
-                Log.w(TAG, "[VoiceConnection] Missing chatId or link in handle, cannot deep link. chatId=" + chatId + ", link=" + link);
+                Log.w(TAG, "[VoiceConnection] Missing chatId or link, cannot navigate");
                 return;
             }
     
-            // Parse account and metadata out of the livekit link
-            Uri linkUri = Uri.parse(link);
-            String account = linkUri.getQueryParameter("account");
-            String metadata = linkUri.getQueryParameter("metadata");
+            // Use process importance to reliably detect if app is alive
+            boolean appIsAlive = false;
+            ActivityManager activityManager = (ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
+            List<ActivityManager.RunningAppProcessInfo> processes = activityManager.getRunningAppProcesses();
+            if (processes != null) {
+                for (ActivityManager.RunningAppProcessInfo process : processes) {
+                    if (process.processName.equals(context.getPackageName())) {
+                        appIsAlive = process.importance < ActivityManager.RunningAppProcessInfo.IMPORTANCE_GONE;
+                        break;
+                    }
+                }
+            }
     
-            // Build the Expo Router deep link path:
-            // yourscheme:///(no-auth)/call/{chatId}?account=...&metadata=...&callkeepUUID=...
-            // Build URI string manually to avoid appendPath encoding (no-auth) parentheses
-            StringBuilder uriString = new StringBuilder("zenfinder:///(no-auth)/call/");
-            uriString.append(Uri.encode(chatId));
-            
-            boolean firstParam = true;
-            if (account != null) {
-                uriString.append("?account=").append(Uri.encode(account));
-                firstParam = false;
+            Log.d(TAG, "[VoiceConnection] App is alive: " + appIsAlive);
+    
+            if (appIsAlive) {
+                // App is in foreground or background — process is alive so JS is running.
+                // Just bring the activity forward; JS handleAnswerCall will handle navigation
+                // via router.push which preserves the nav stack (no home flash).
+                Intent launchIntent = context.getPackageManager().getLaunchIntentForPackage(context.getPackageName());
+                if (launchIntent != null) {
+                    launchIntent.addFlags(
+                        Intent.FLAG_ACTIVITY_NEW_TASK |
+                        Intent.FLAG_ACTIVITY_SINGLE_TOP |
+                        Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+                    );
+                    context.startActivity(launchIntent);
+                    Log.d(TAG, "[VoiceConnection] App alive — brought to foreground, JS will navigate");
+                }
+            } else {
+                // App is killed — JS doesn't exist yet so we can't rely on JS navigation.
+                // Deep link encodes the route in the launch URL so Expo Router boots
+                // directly to the call page before JS even runs.
+                Uri linkUri = Uri.parse(link);
+                String account = linkUri.getQueryParameter("account");
+                String metadata = linkUri.getQueryParameter("metadata");
+    
+                StringBuilder uriString = new StringBuilder("zenfinder:///(no-auth)/call/");
+                uriString.append(Uri.encode(chatId));
+    
+                boolean firstParam = true;
+                if (account != null) {
+                    uriString.append("?account=").append(Uri.encode(account));
+                    firstParam = false;
+                }
+                if (metadata != null) {
+                    uriString.append(firstParam ? "?" : "&").append("metadata=").append(Uri.encode(metadata));
+                    firstParam = false;
+                }
+                if (callUUID != null) {
+                    uriString.append(firstParam ? "?" : "&").append("callkeepUUID=").append(Uri.encode(callUUID));
+                }
+    
+                Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(uriString.toString()));
+                intent.setPackage(context.getPackageName());
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                context.startActivity(intent);
+                Log.d(TAG, "[VoiceConnection] App killed — deep linked to: " + uriString);
             }
-            if (metadata != null) {
-                uriString.append(firstParam ? "?" : "&").append("metadata=").append(Uri.encode(metadata));
-                firstParam = false;
-            }
-            if (callUUID != null) {
-                uriString.append(firstParam ? "?" : "&").append("callkeepUUID=").append(Uri.encode(callUUID));
-            }
-            
-            Uri deepLinkUri = Uri.parse(uriString.toString());
-            Log.d(TAG, "[VoiceConnection] Deep linking to: " + deepLinkUri);
-            
-            Intent intent = new Intent(Intent.ACTION_VIEW, deepLinkUri);
-            intent.setPackage(context.getPackageName());
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-            context.startActivity(intent);
-            Log.d(TAG, "[VoiceConnection] Deep link intent started successfully");
     
         } catch (Throwable t) {
-            Log.e(TAG, "[VoiceConnection] Failed to deep link on answer", t);
+            Log.e(TAG, "[VoiceConnection] Failed to handle answer navigation", t);
         }
 
     }
