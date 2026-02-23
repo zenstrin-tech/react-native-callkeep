@@ -754,6 +754,15 @@ public class RNCallKeepModule extends ReactContextBaseJavaModule implements Life
            Log.w(TAG, "[RNCallKeepModule] onHostDestroy ignored due to no ConnectionService or no phone account");
            return;
        }
+       
+       // If there are active connections (user is on a call), do NOT end them
+       // or kill the process — the call should survive app switching.
+       // VoiceConnectionService is a separate long-lived service and will keep
+       // the call alive independently of the Activity lifecycle.
+       if (!VoiceConnectionService.currentConnections.isEmpty()) {
+           Log.d(TAG, "[RNCallKeepModule] onHostDestroy: active call in progress, skipping teardown");
+           return;
+       }
 
        ArrayList<Map.Entry<String, VoiceConnection>> connections =
            new ArrayList<Map.Entry<String, VoiceConnection>>(VoiceConnectionService.currentConnections.entrySet());
