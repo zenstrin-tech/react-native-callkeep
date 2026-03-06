@@ -1035,23 +1035,39 @@ public class RNCallKeepModule extends ReactContextBaseJavaModule implements Life
             return;
         }
 
-        if (Build.MANUFACTURER.equalsIgnoreCase("Samsung") || Build.MANUFACTURER.equalsIgnoreCase("OnePlus")) {
-            Intent intent = new Intent();
-            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_MULTIPLE_TASK);
-            intent.setComponent(new ComponentName("com.android.server.telecom",
-                    "com.android.server.telecom.settings.EnableAccountPreferenceActivity"));
+        // if (Build.MANUFACTURER.equalsIgnoreCase("Samsung") || Build.MANUFACTURER.equalsIgnoreCase("OnePlus")) {
+        //     Intent intent = new Intent();
+        //     intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_MULTIPLE_TASK);
+        //     intent.setComponent(new ComponentName("com.android.server.telecom",
+        //             "com.android.server.telecom.settings.EnableAccountPreferenceActivity"));
 
-            Context context = this.getAppContext();
-            if (context == null) {
-                Log.w(TAG, "[RNCallKeepModule][openPhoneAccounts] no react context found.");
-                return;
-            }
+        //     Context context = this.getAppContext();
+        //     if (context == null) {
+        //         Log.w(TAG, "[RNCallKeepModule][openPhoneAccounts] no react context found.");
+        //         return;
+        //     }
 
-            context.startActivity(intent);
+        //     context.startActivity(intent);
+        //     return;
+        // }
+
+        // openPhoneAccountSettings();
+
+        Intent intent = new Intent();
+        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_MULTIPLE_TASK);
+        intent.setComponent(new ComponentName("com.android.server.telecom",
+            "com.android.server.telecom.settings.EnableAccountPreferenceActivity"));
+        Context context = this.getAppContext();
+        if (context == null) {
+            Log.w(TAG, "[RNCallKeepModule][openPhoneAccounts] no react context found.");
             return;
         }
-
-        openPhoneAccountSettings();
+        try {
+            context.startActivity(intent);
+        } catch (Exception e) {
+            // Fallback for devices that don't have this activity
+            openPhoneAccountSettings();
+        }
     }
 
     @ReactMethod
